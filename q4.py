@@ -1,98 +1,63 @@
 import streamlit as st
 import nltk
-import os
 from nltk.tokenize import sent_tokenize
 from PyPDF2 import PdfReader
 
 # ============================ #
-# Page Setup #
+# Streamlit Page Setup
 # ============================ #
-st.set_page_config(
-    page_title="Text Chunking with NLTK",
-    layout="wide"
-)
-
-# Custom Title Styling
-st.markdown("<h1 style='text-align: center; color: #4CAF50;'>Text Chunking Web App</h1>", unsafe_allow_html=True)
-st.caption("Extract and chunk sentences semantically from PDF text using NLTK")
+st.set_page_config(page_title="PDF Sentence Chunking", layout="wide")
+st.title("Text Chunking from PDF using NLTK")
+st.caption("Extract sentences from your PDF using NLTK's sentence tokenizer")
 
 # ============================ #
-# NLTK Setup for Streamlit #
+# NLTK Setup for Streamlit
 # ============================ #
-# Set NLTK data path to the temporary directory
-nltk_data_path = '/tmp/nltk_data'
-if not os.path.exists(nltk_data_path):
-    os.makedirs(nltk_data_path)
-
-nltk.data.path.append(nltk_data_path)
-
-# Download both 'punkt' and 'punkt_tab' to ensure compatibility
-try:
-    nltk.data.find('tokenizers/punkt_tab')
-except LookupError:
-    nltk.download('punkt', download_dir=nltk_data_path)
-    nltk.download('punkt_tab', download_dir=nltk_data_path)
+# Ensure punkt is available for sentence tokenization
+nltk.download('punkt', quiet=True)
 
 # ============================ #
-# Step 1: PDF File Upload #
+# PDF File Upload
 # ============================ #
-st.sidebar.header("Upload Your PDF Document")
-uploaded_file = st.sidebar.file_uploader("Choose a PDF file", type=["pdf"])
+uploaded_file = st.file_uploader("Upload your PDF document", type=["pdf"])
 
 if uploaded_file is not None:
+    try:
+        # Extract text from PDF
+        pdf_reader = PdfReader(uploaded_file)
+        document_text = ""
+        for page in pdf_reader.pages:
+            document_text += page.extract_text() or ""  # Extract text from each page
 
-    # ============================ #
-    # Step 2: Extract Text from PDF #
-    # ============================ #
-    pdf_reader = PdfReader(uploaded_file)
-    document_text = ""
-
-    for page in pdf_reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            document_text += extracted + " "
-
-    # ============================ #
-    # Step 3: Sentence Tokenization #
-    # ============================ #
-    if document_text.strip():
-        tokenized_sentences = sent_tokenize(document_text)
-
-        st.subheader("Sample Extracted Sentences (Index 58–68)")
-
-        if len(tokenized_sentences) >= 69:
-            sample = tokenized_sentences[58:69]
-            for idx, sentence in enumerate(sample, start=58):
-                st.write(f"**Sentence {idx}:** {sentence}")
+        # Check if any text was extracted
+        if not document_text.strip():
+            st.warning("No readable text found in this PDF.")
         else:
-            st.warning(f"The document only contains {len(tokenized_sentences)} sentences. Not enough to show the 58-68 range.")
+            st.success("Text extracted successfully!")
+            st.subheader("Extracted Text Sample (first 500 characters)")
+            st.write(document_text[:500])  # Show the first 500 characters
 
-        # ============================ #
-        # Step 4: Sentence Chunking Output #
-        # ============================ #
-        st.subheader("🔍 Semantic Sentence Chunking Output")
+            # ============================ #
+            # Sentence Tokenization
+            # ============================ #
+            sentences = sent_tokenize(document_text)
+            st.subheader(f"Total Sentences: {len(sentences)}")
 
-        chunk_data = {
-            "Sentence Index": list(range(len(tokenized_sentences))),
-            "Sentence": tokenized_sentences
-        }
+            # Control to show a specific range of sentences
+            start_idx = st.number_input("Show sentences starting from index", min_value=0, max_value=max(len(sentences) - 1, 0), value=0, step=1)
+            end_idx = st.number_input("Show sentences up to index (exclusive)", min_value=start_idx + 1, max_value=len(sentences), value=min(start_idx + 10, len(sentences)), step=1)
 
-        st.dataframe(chunk_data, use_container_width=True)
+            st.subheader(f"Displaying Sentences [{start_idx} - {end_idx}]")
+            for idx in range(start_idx, end_idx):
+                st.write(f"**Sentence {idx}:** {sentences[idx]}")
 
-        st.info(
-            "NLTK's sentence tokenizer segments unstructured text into meaningful, "
-            "sentence-level chunks that can be further analyzed for semantics."
-        )
-    else:
-        st.error("Could not extract any text from this PDF. It might be an image-only scan.")
+            # ============================ #
+            # Optional: Raw Extracted Text
+            # ============================ #
+            with st.expander("Show full extracted text (first 2000 characters)"):
+                st.text(document_text[:2000])
 
-# ============================ #
-# Additional Section for Instructions #
-# ============================ #
-with st.expander("How it works"):
-    st.write("""
-        - **Upload**: You can upload any PDF document to be processed by the app.
-        - **Extract**: The app extracts the text from the PDF.
-        - **Tokenization**: The text is broken down into individual sentences using the NLTK sentence tokenizer.
-        - **Chunking**: The sentences are displayed along with their index, and the process is ready for further semantic analysis.
-    """)
+    except Exception as e:
+        st.error(f"Error processing PDF: {e}")
+else:
+    st.info("Please upload a PDF document to start.")
