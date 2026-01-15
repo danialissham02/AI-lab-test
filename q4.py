@@ -16,14 +16,17 @@ st.title("Text Chunking Web App (NLTK Sentence Tokenizer)")
 st.caption("Extract and chunk sentences semantically from PDF text")
 
 # Set NLTK data path to the temporary directory for Streamlit Cloud
-nltk_data_path = '/tmp/nltk_data'
+nltk_data_path = '/tmp/nltk_data'  # Using '/tmp' directory for writable space
 if not os.path.exists(nltk_data_path):
     os.makedirs(nltk_data_path)
 
 nltk.data.path.append(nltk_data_path)
 
-# Download the 'punkt' tokenizer if it doesn't exist
-nltk.download('punkt', download_dir=nltk_data_path)
+# Attempt to download the 'punkt' tokenizer data into the specified path
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', download_dir=nltk_data_path)
 
 # ============================ #
 # Step 1: PDF File Upload #
@@ -67,6 +70,12 @@ if uploaded_file is not None:
     }
 
     st.dataframe(chunk_data, use_container_width=True)
+
+    st.info(
+        "NLTK's sentence tokenizer segments unstructured text into meaningful, "
+        "sentence-level chunks that can be further analyzed for semantics."
+    )
+
 
     st.info(
         "NLTK's sentence tokenizer segments unstructured text into meaningful, "
