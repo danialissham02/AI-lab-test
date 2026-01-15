@@ -77,15 +77,46 @@ def genetic_algorithm():
     return pd.DataFrame(log), population[best_idx], final_scores[best_idx]
 
 # ================== STREAMLIT UI ==================
-st.set_page_config(page_title="OneMax Genetic Algorithm", layout="wide")
-st.title("Genetic Algorithm Optimization (OneMax Problem)")
+st.set_page_config(page_title="Genetic Algorithm Optimization", layout="centered")
 
+# Add a background color to the title and adjust the page's look
+st.markdown("""
+    <style>
+        .title {
+            color: #4CAF50;
+            font-size: 40px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown('<p class="title">Genetic Algorithm Optimization (OneMax Problem)</p>', unsafe_allow_html=True)
+
+st.caption("This app demonstrates the optimization of the OneMax problem using a genetic algorithm with various operators.")
+
+# Use a different section layout for controls
+with st.expander("Adjust GA Settings"):
+    POP_SIZE = st.slider("Population Size", 50, 500, POP_SIZE)
+    GENE_LENGTH = st.slider("Gene Length", 10, 100, GENE_LENGTH)
+    N_GENERATIONS = st.slider("Generations", 10, 100, N_GENERATIONS)
+    PC = st.slider("Crossover Probability", 0.0, 1.0, PC)
+    PM = st.slider("Mutation Probability", 0.0, 1.0, PM)
+    ELITE_COUNT = st.slider("Elite Count", 1, 10, ELITE_COUNT)
+    TOUR_SIZE = st.slider("Tournament Size", 2, 10, TOUR_SIZE)
+
+# Button to run the algorithm
 if st.button("Run Genetic Algorithm"):
     history_df, best_individual, best_score = genetic_algorithm()
 
-    st.subheader("Fitness Progress Over Generations")
+    st.subheader("📊 Fitness Progress Over Generations")
     st.line_chart(history_df.set_index("Generation"))
 
-    st.subheader("Optimal Chromosome")
+    st.subheader("🏆 Optimal Solution")
     st.write(f"**Best Fitness:** {best_score} / {GENE_LENGTH}")
     st.code("".join(map(str, best_individual)))
+
+    st.info(
+        "This genetic algorithm evolves a population of binary strings to solve the OneMax problem. "
+        "The goal is to maximize the number of 1s in the chromosome."
+    )
