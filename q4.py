@@ -15,8 +15,8 @@ st.set_page_config(
 st.title("Text Chunking Web App (NLTK Sentence Tokenizer)")
 st.caption("Extract and chunk sentences semantically from PDF text")
 
-# Set NLTK data path explicitly
-nltk_data_path = '/usr/local/share/nltk_data'
+# Set NLTK data path to the temporary directory for Streamlit Cloud
+nltk_data_path = '/tmp/nltk_data'
 if not os.path.exists(nltk_data_path):
     os.makedirs(nltk_data_path)
 
