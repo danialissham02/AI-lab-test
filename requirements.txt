@@ -3,7 +3,7 @@ torchvision
 pillow
 requests
 pandas
-streamlit
 nltk
 PyPDF2
+streamlit
 
