@@ -1,63 +1,57 @@
 import streamlit as st
 import nltk
-from nltk.tokenize import sent_tokenize
 from PyPDF2 import PdfReader
 
-# ============================ #
-# Streamlit Page Setup
-# ============================ #
-st.set_page_config(page_title="PDF Sentence Chunking", layout="wide")
-st.title("Text Chunking from PDF using NLTK")
-st.caption("Extract sentences from your PDF using NLTK's sentence tokenizer")
+# Step 3 (Partial): Ensure NLTK punkt is available for tokenization
+nltk.download("punkt", quiet=True)
 
-# ============================ #
-# NLTK Setup for Streamlit
-# ============================ #
-# Ensure punkt is available for sentence tokenization
-nltk.download('punkt', quiet=True)
+st.set_page_config(page_title="Q4: PDF Sentence Chunker", layout="wide")
+st.title("Question 4: Semantic Text Chunking Web App")
 
-# ============================ #
-# PDF File Upload
-# ============================ #
-uploaded_file = st.file_uploader("Upload your PDF document", type=["pdf"])
+# Step 1: File Uploader using PyPDF2's PdfReader
+uploaded_file = st.file_uploader("Step 1: Upload a PDF file", type=["pdf"])
 
 if uploaded_file is not None:
     try:
-        # Extract text from PDF
-        pdf_reader = PdfReader(uploaded_file)
-        document_text = ""
-        for page in pdf_reader.pages:
-            document_text += page.extract_text() or ""  # Extract text from each page
+        # Step 1: Import the PDF file using PdfReader
+        reader = PdfReader(uploaded_file)
+        
+        # Step 2: Extract textual content from the uploaded PDF
+        pages_text = []
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            pages_text.append(page_text)
+        full_text = " ".join(pages_text).strip()
 
-        # Check if any text was extracted
-        if not document_text.strip():
-            st.warning("No readable text found in this PDF.")
+        if not full_text:
+            st.warning("No text could be extracted from this PDF.")
         else:
-            st.success("Text extracted successfully!")
-            st.subheader("Extracted Text Sample (first 500 characters)")
-            st.write(document_text[:500])  # Show the first 500 characters
+            # Step 4: Apply NLTK's sentence tokenizer (Semantic Chunking)
+            sentences = nltk.sent_tokenize(full_text)
+            
+            st.success(f"Total sentences detected: {len(sentences)}")
 
-            # ============================ #
-            # Sentence Tokenization
-            # ============================ #
-            sentences = sent_tokenize(document_text)
-            st.subheader(f"Total Sentences: {len(sentences)}")
+            # Step 3: Display a sample of the extracted text for indices 58 to 68
+            st.subheader("Step 3: Extracted Sentences (Indices 58 to 68)")
+            
+            # Boundary check to ensure indices exist
+            start_idx, end_idx = 58, 69 # 69 is exclusive to include index 68
+            
+            if len(sentences) > start_idx:
+                # Iterate through the specific requested range
+                for i in range(start_idx, min(end_idx, len(sentences))):
+                    st.markdown(f"**Sentence {i}**: {sentences[i]}")
+            else:
+                st.info(f"The PDF only has {len(sentences)} sentences. Indices 58-68 are out of range.")
 
-            # Control to show a specific range of sentences
-            start_idx = st.number_input("Show sentences starting from index", min_value=0, max_value=max(len(sentences) - 1, 0), value=0, step=1)
-            end_idx = st.number_input("Show sentences up to index (exclusive)", min_value=start_idx + 1, max_value=len(sentences), value=min(start_idx + 10, len(sentences)), step=1)
-
-            st.subheader(f"Displaying Sentences [{start_idx} - {end_idx}]")
-            for idx in range(start_idx, end_idx):
-                st.write(f"**Sentence {idx}:** {sentences[idx]}")
-
-            # ============================ #
-            # Optional: Raw Extracted Text
-            # ============================ #
-            with st.expander("Show full extracted text (first 2000 characters)"):
-                st.text(document_text[:2000])
+            # Optional: Original dynamic controls from your code
+            with st.expander("View custom range of sentences"):
+                custom_start = st.number_input("Start index", 0, len(sentences)-1, 0)
+                custom_end = st.number_input("End index", custom_start+1, len(sentences), min(custom_start+10, len(sentences)))
+                for j in range(custom_start, custom_end):
+                    st.write(f"{j}: {sentences[j]}")
 
     except Exception as e:
         st.error(f"Error processing PDF: {e}")
 else:
-    st.info("Please upload a PDF document to start.")
+    st.info("Please upload a PDF to proceed with Question 4.")
