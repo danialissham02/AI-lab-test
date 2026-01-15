@@ -1,10 +1,9 @@
-import json
-from typing import List, Dict, Any, Tuple
-import operator
 import streamlit as st
+import operator
+from typing import List, Dict, Any, Tuple
 
 # ============================ #
-# 1) RULE ENGINE CONFIGURATION #
+# RULE ENGINE CONFIGURATION #
 # ============================ #
 COMPARISONS = {
     "==": operator.eq,
@@ -17,95 +16,99 @@ COMPARISONS = {
 
 DEFAULT_CONDITIONS: List[Dict[str, Any]] = [
     {
-        "rule_name": "Windows open → turn off AC",
-        "rule_priority": 100,
-        "trigger_conditions": [["windows_open", "==", True]],
-        "ac_action": {
-            "mode": "OFF",
+        "name": "Windows open → turn AC off",
+        "priority": 100,
+        "conditions": [
+            ["windows_open", "==", True]
+        ],
+        "action": {
+            "ac_mode": "OFF",
             "fan_speed": "LOW",
             "setpoint": None,
             "reason": "Windows are open"
         }
     },
     {
-        "rule_name": "No one home → eco mode",
-        "rule_priority": 90,
-        "trigger_conditions": [
+        "name": "No one home → eco mode",
+        "priority": 90,
+        "conditions": [
             ["occupancy", "==", "EMPTY"],
             ["temperature", ">=", 24]
         ],
-        "ac_action": {
-            "mode": "ECO",
+        "action": {
+            "ac_mode": "ECO",
             "fan_speed": "LOW",
             "setpoint": 27,
-            "reason": "Home empty, save energy"
+            "reason": "Home empty; save energy"
         }
     },
     {
-        "rule_name": "Hot & humid (occupied) → strong cooling",
-        "rule_priority": 80,
-        "trigger_conditions": [
+        "name": "Hot & humid (occupied) → cool strong",
+        "priority": 80,
+        "conditions": [
             ["occupancy", "==", "OCCUPIED"],
             ["temperature", ">=", 30],
             ["humidity", ">=", 70]
         ],
-        "ac_action": {
-            "mode": "COOL",
+        "action": {
+            "ac_mode": "COOL",
             "fan_speed": "HIGH",
             "setpoint": 23,
             "reason": "Hot and humid"
         }
     },
     {
-        "rule_name": "Hot (occupied) → cool",
-        "rule_priority": 70,
-        "trigger_conditions": [
+        "name": "Hot (occupied) → cool",
+        "priority": 70,
+        "conditions": [
             ["occupancy", "==", "OCCUPIED"],
             ["temperature", ">=", 28]
         ],
-        "ac_action": {
-            "mode": "COOL",
+        "action": {
+            "ac_mode": "COOL",
             "fan_speed": "MEDIUM",
             "setpoint": 24,
             "reason": "Temperature high"
         }
     },
     {
-        "rule_name": "Slightly warm (occupied) → gentle cool",
-        "rule_priority": 60,
-        "trigger_conditions": [
+        "name": "Slightly warm (occupied) → gentle cool",
+        "priority": 60,
+        "conditions": [
             ["occupancy", "==", "OCCUPIED"],
             ["temperature", ">=", 26],
             ["temperature", "<", 28]
         ],
-        "ac_action": {
-            "mode": "COOL",
+        "action": {
+            "ac_mode": "COOL",
             "fan_speed": "LOW",
             "setpoint": 25,
             "reason": "Slightly warm"
         }
     },
     {
-        "rule_name": "Night (occupied) → sleep mode",
-        "rule_priority": 75,
-        "trigger_conditions": [
+        "name": "Night (occupied) → sleep mode",
+        "priority": 75,
+        "conditions": [
             ["occupancy", "==", "OCCUPIED"],
             ["time_of_day", "==", "NIGHT"],
             ["temperature", ">=", 26]
         ],
-        "ac_action": {
-            "mode": "SLEEP",
+        "action": {
+            "ac_mode": "SLEEP",
             "fan_speed": "LOW",
             "setpoint": 26,
             "reason": "Night comfort"
         }
     },
     {
-        "rule_name": "Too cold → turn off AC",
-        "rule_priority": 85,
-        "trigger_conditions": [["temperature", "<=", 22]],
-        "ac_action": {
-            "mode": "OFF",
+        "name": "Too cold → turn off",
+        "priority": 85,
+        "conditions": [
+            ["temperature", "<=", 22]
+        ],
+        "action": {
+            "ac_mode": "OFF",
             "fan_speed": "LOW",
             "setpoint": None,
             "reason": "Already cold"
@@ -113,103 +116,68 @@ DEFAULT_CONDITIONS: List[Dict[str, Any]] = [
     }
 ]
 
-def validate_condition(facts: Dict[str, Any], condition: List[Any]) -> bool:
-    field, op, value = condition
-    if field not in facts or op not in COMPARISONS:
+def evaluate_condition(facts: Dict[str, Any], condition: List[Any]) -> bool:
+    field, operator, value = condition
+    if field not in facts or operator not in COMPARISONS:
         return False
-    return COMPARISONS[op](facts[field], value)
+    return COMPARISONS[operator](facts[field], value)
 
 def check_rule_match(facts: Dict[str, Any], rule: Dict[str, Any]) -> bool:
-    return all(validate_condition(facts, cond) for cond in rule["trigger_conditions"])
+    return all(evaluate_condition(facts, cond) for cond in rule["conditions"])
 
 def execute_rules(facts: Dict[str, Any], rules: List[Dict[str, Any]]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     triggered_rules = [rule for rule in rules if check_rule_match(facts, rule)]
     if not triggered_rules:
-        return {"mode": "OFF", "reason": "No matching rules"}, []
+        return {"ac_mode": "OFF", "reason": "No matching rules"}, []
     
-    sorted_rules = sorted(triggered_rules, key=lambda r: r["rule_priority"], reverse=True)
-    return sorted_rules[0]["ac_action"], sorted_rules
+    sorted_rules = sorted(triggered_rules, key=lambda r: r["priority"], reverse=True)
+    return sorted_rules[0]["action"], sorted_rules
 
 # ============================== #
-# 2) REDESIGNED INTERFACE UI    #
+# STREAMLIT INTERFACE #
 # ============================== #
-st.set_page_config(page_title="AC Controller Pro", layout="wide")
+st.set_page_config(page_title="Smart AC System", layout="wide")
+st.title("Smart Air Conditioner Rule-Based System")
 
-# Updated CSS: Removed fixed white backgrounds to support Dark Mode
-st.markdown("""
-    <style>
-    /* Use transparent backgrounds with borders so they adapt to theme */
-    div[data-testid="stMetric"] {
-        background-color: rgba(128, 128, 128, 0.1);
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        padding: 15px;
-        border-radius: 10px;
-    }
-    .status-card {
-        padding: 20px;
-        border-radius: 15px;
-        border-left: 5px solid #007bff;
-        background-color: rgba(128, 128, 128, 0.05);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# Sidebar for input
+with st.sidebar:
+    st.header("Current Home Conditions")
+    temperature_input = st.number_input("Temperature (°C)", value=22)
+    humidity_input = st.number_input("Humidity (%)", value=46)
+    occupancy_input = st.selectbox("Occupancy", ["OCCUPIED", "EMPTY"])
+    time_of_day_input = st.selectbox("Time of Day", ["DAY", "NIGHT"])
+    windows_open_input = st.checkbox("Windows Open", value=False)
+    evaluate_button = st.button("Evaluate AC Action")
 
-st.title("❄️ ClimateControl AI Dashboard")
-st.markdown("---")
-
-col_in, col_out = st.columns([1, 1], gap="large")
-
-with col_in:
-    st.subheader("📍 Environment Sensors")
-    temp = st.slider("Ambient Temperature (°C)", 10, 45, 22)
-    humid = st.slider("Relative Humidity (%)", 0, 100, 46)
-    
-    st.markdown("---")
-    st.subheader("🏠 Home State")
-    occ = st.radio("Occupancy Status", ["OCCUPIED", "EMPTY"], horizontal=True)
-    tod = st.radio("Current Period", ["DAY", "NIGHT"], horizontal=True)
-    win = st.toggle("Windows / Ventilation Open", value=False)
-    
-    run_btn = st.button("Apply Settings & Sync AC", use_container_width=True, type="primary")
-
+# Facts data based on user input
 facts_data = {
-    "temperature": temp,
-    "humidity": humid,
-    "occupancy": occ,
-    "time_of_day": tod,
-    "windows_open": win
+    "temperature": temperature_input,
+    "humidity": humidity_input,
+    "occupancy": occupancy_input,
+    "time_of_day": time_of_day_input,
+    "windows_open": windows_open_input
 }
 
-with col_out:
-    if run_btn:
-        action, matched = execute_rules(facts_data, DEFAULT_CONDITIONS)
-        
-        st.subheader("🕹️ System Output")
-        
-        # Display as high-level metrics
-        m1, m2, m3 = st.columns(3)
-        with m1: st.metric("Mode", action['mode'])
-        with m2: st.metric("Fan", action['fan_speed'])
-        with m3: st.metric("Target", f"{action['setpoint']}°C" if action['setpoint'] else "N/A")
-        
-        # Using built-in containers that handle theme colors automatically
-        with st.container(border=True):
-            st.markdown(f"**Decision Logic:** {action['reason']}")
-        
-        with st.expander("View Logic Trace"):
-            st.write("### Sensor Data Snapshot")
-            st.json(facts_data)
-            
-            st.write("### Rule Processing Queue")
-            if matched:
-                for i, r in enumerate(matched):
-                    symbol = "✅" if i == 0 else "📎"
-                    st.write(f"{symbol} **{r['rule_name']}**")
-                    st.caption(f"Priority Score: {r['rule_priority']}")
-            else:
-                st.warning("No logic rules triggered. System defaulting to OFF.")
-    else:
-        st.info("Adjust the sensors on the left and click **Apply Settings** to simulate the AC logic.")
+# Display the facts entered
+st.subheader("Input Facts")
+st.json(facts_data)
 
-st.markdown("---")
-st.caption("ClimateControl AI v2.0 • Rule-Based Expert System")
+# If the button is clicked, run the rule-based system
+if evaluate_button:
+    action_details, matching_rules = execute_rules(facts_data, DEFAULT_CONDITIONS)
+
+    # Display the recommended AC action
+    st.subheader("Recommended AC Action")
+    st.success(
+        f"""
+        **AC Mode:** {action_details['ac_mode']}  
+        **Fan Speed:** {action_details['fan_speed']}  
+        **Setpoint:** {action_details['setpoint']}  
+        **Reason:** {action_details['reason']}
+        """
+    )
+
+    # Display matched rules
+    st.subheader("Matched Rules (Ordered by Priority)")
+    for rule in matching_rules:
+        st.write(f"• **{rule['name']}** (Priority: {rule['priority']})")
