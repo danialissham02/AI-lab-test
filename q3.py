@@ -1,52 +1,45 @@
 import streamlit as st
 import torch
+import torchvision.models as models
+import torchvision.transforms as transforms
 import torch.nn.functional as F
-from torchvision import models, transforms
 from PIL import Image
 import requests
-import json
-from io import BytesIO
+import pandas as pd
 
-# ----------------------------- #
-# 1. Page config
-# ----------------------------- #
+# ------------------------------- #
+# Page Setup #
+# ------------------------------- #
 st.set_page_config(
-    page_title="Image Classification with PyTorch & Streamlit",
-    page_icon="",
+    page_title="Live Image Classification",
     layout="centered"
 )
 
-st.title("Simple Image Classification Web App")
-st.write("Using **PyTorch ResNet-18 (pretrained on ImageNet)** + Streamlit")
+st.title("📷 Real-Time Image Classification Web App")
+st.caption("Pretrained ResNet-18 Model | Computer Vision with OpenCV Output")
 
-# ----------------------------- #
-# 2. Utility: Load labels
-# ----------------------------- #
-@st.cache_data
-def load_imagenet_labels():
-    """
-    Download ImageNet class index (only once, then cached).
-    """
-    url = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
-    response = requests.get(url)
-    labels = response.text.strip().split("\n")
-    return labels
+# ------------------------------- #
+# Step 1: Library Setup #
+# ------------------------------- #
+device = torch.device("cpu")
 
-# ----------------------------- #
-# 3. Utility: Load model
-# ----------------------------- #
-@st.cache_resource
-def load_model():
-    model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-    model.eval()
-    return model
+# ------------------------------- #
+# Step 2: Fetch ImageNet Class Labels #
+# ------------------------------- #
+IMAGENET_CLASSES_URL = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
+response = requests.get(IMAGENET_CLASSES_URL)
+class_labels = response.text.splitlines()
 
-labels = load_imagenet_labels()
-model = load_model()
+# ------------------------------- #
+# Step 3: Load Pretrained ResNet-18 #
+# ------------------------------- #
+cnn_model = models.resnet18(pretrained=True)
+cnn_model.eval()
+cnn_model.to(device)
 
-# ----------------------------- #
-# 4. Define transforms
-# ----------------------------- #
+# ------------------------------- #
+# Step 4: Image Preprocessing Steps #
+# ------------------------------- #
 preprocess = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(224),
@@ -58,47 +51,55 @@ preprocess = transforms.Compose([
     )
 ])
 
-# ----------------------------- #
-# 5. File uploader
-# ----------------------------- #
-uploaded_file = st.file_uploader(
-    "Upload an image (jpg/png)", 
-    type=["jpg", "jpeg", "png"]
-)
+# ------------------------------- #
+# Step 5: Capture Image from Webcam #
+# ------------------------------- #
+st.subheader("📸 Capture Image")
+captured_img = st.camera_input("Take a photo with your webcam")
 
-if uploaded_file is not None:
-    # Display original image
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+if captured_img is not None:
+    img = Image.open(captured_img).convert("RGB")
 
-    # Preprocess
-    input_tensor = preprocess(image)
-    input_batch = input_tensor.unsqueeze(0)  # shape: [1, 3, 224, 224]
+    st.image(img, caption="Captured Image", use_column_width=True)
 
-    # Move to device (CPU only for simplicity)
+    # Preprocess the Image
+    input_tensor = preprocess(img)
+    input_batch = input_tensor.unsqueeze(0).to(device)
+
+    # ------------------------------- #
+    # Step 6: Model Prediction & Softmax Calculation #
+    # ------------------------------- #
     with torch.no_grad():
-        outputs = model(input_batch)
-        probabilities = F.softmax(outputs[0], dim=0)
+        model_output = cnn_model(input_batch)
 
-    # Get top-5 predictions
-    top5_prob, top5_catid = torch.topk(probabilities, 5)
+    softmax_probs = F.softmax(model_output[0], dim=0)
 
-    st.subheader("🔍 Top-5 Predictions")
-    for i in range(top5_prob.size(0)):
-        st.write(
-            f"**{labels[top5_catid[i]]}** — "
-            f"probability: {top5_prob[i].item():.4f}"
-        )
+    # Get Top 5 Predictions
+    top5_probs, top5_indices = torch.topk(softmax_probs, 5)
 
-    # Show as table
-    st.write("### 📊 Predictions Table")
-    import pandas as pd
-
-    df = pd.DataFrame({
-        "Label": [labels[idx] for idx in top5_catid],
-        "Probability": [float(p) for p in top5_prob]
+    # Prepare Result DataFrame
+    prediction_data = pd.DataFrame({
+        "Class Label": [class_labels[idx] for idx in top5_indices],
+        "Probability": top5_probs.cpu().numpy()
     })
-    st.dataframe(df, use_container_width=True)
 
-else:
-    st.info("👆 Please upload an image to start.")
+    # ------------------------------- #
+    # Display Results #
+    # ------------------------------- #
+    st.subheader("🔍 Top-5 Predictions")
+    st.dataframe(prediction_data, use_container_width=True)
+
+    st.bar_chart(
+        prediction_data.set_index("Class Label"),
+        horizontal=True
+    )
+
+    st.success(
+        f"Top Prediction: {prediction_data.iloc[0]['Class Label']} "
+        f"({prediction_data.iloc[0]['Probability']:.2%})"
+    )
+
+    st.info(
+        "Softmax probabilities represent the confidence of the predicted classes."
+    )
+
