@@ -14,8 +14,8 @@ st.set_page_config(
 st.title("Text Chunking Web App (NLTK Sentence Tokenizer)")
 st.caption("Extract and chunk sentences semantically from PDF text")
 
-# Download NLTK resources
-nltk.download("punkt")
+# Ensure that the 'punkt' tokenizer is downloaded before using it
+nltk.download('punkt')
 
 # ============================ #
 # Step 1: PDF File Upload #
