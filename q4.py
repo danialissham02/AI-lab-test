@@ -1,5 +1,6 @@
 import streamlit as st
 import nltk
+import os
 from nltk.tokenize import sent_tokenize
 from PyPDF2 import PdfReader
 
@@ -14,8 +15,15 @@ st.set_page_config(
 st.title("Text Chunking Web App (NLTK Sentence Tokenizer)")
 st.caption("Extract and chunk sentences semantically from PDF text")
 
-# Ensure that the 'punkt' tokenizer is downloaded before using it
-nltk.download('punkt')
+# Set NLTK data path explicitly
+nltk_data_path = '/usr/local/share/nltk_data'
+if not os.path.exists(nltk_data_path):
+    os.makedirs(nltk_data_path)
+
+nltk.data.path.append(nltk_data_path)
+
+# Download the 'punkt' tokenizer if it doesn't exist
+nltk.download('punkt', download_dir=nltk_data_path)
 
 # ============================ #
 # Step 1: PDF File Upload #
