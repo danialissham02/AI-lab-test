@@ -1,122 +1,148 @@
 import numpy as np
-import pandas as pd
+import random
 import streamlit as st
+import matplotlib.pyplot as plt
 
-# ================== GA SETTINGS ==================
-POP_SIZE = 300
-GENE_LENGTH = 80
-N_GENERATIONS = 50
-PC = 0.9          # crossover probability
-PM = 0.01         # mutation probability
-ELITE_COUNT = 2
-TOUR_SIZE = 3
-RANDOM_SEED = 42
+# ========================== #
+# GA SETTINGS #
+# ========================== #
+POP_SIZE = 200  # Population size
+CHROM_LEN = 70  # Length of each individual chromosome
+TARGET_ONES = 40  # Target number of ones
+MAX_FITNESS = 70  # Max fitness when the number of ones is 40
+N_GENERATIONS = 50  # Number of generations
 
-rng = np.random.default_rng(RANDOM_SEED)
+TOURNAMENT_K = 3  # Tournament selection parameter (k)
+CROSSOVER_RATE = 0.9  # Crossover rate
+MUTATION_RATE = 1.0 / CHROM_LEN  # Mutation rate (bit-flipping)
 
-# ================== GA CORE ==================
-def evaluate(chromosome):
-    """OneMax fitness function"""
-    return chromosome.sum()
+# ========================== #
+# GA OPERATORS #
+# ========================== #
+def fitness(individual: np.ndarray) -> float:
+    """
+    Fitness function: Peaks when the number of ones is equal to TARGET_ONES.
+    Max fitness is MAX_FITNESS when ones == TARGET_ONES.
+    """
+    ones = int(individual.sum())
+    return MAX_FITNESS - abs(ones - TARGET_ONES)
 
-def create_population():
-    return rng.integers(0, 2, (POP_SIZE, GENE_LENGTH))
+def init_population(pop_size: int, chrom_len: int) -> np.ndarray:
+    """Initialize the population randomly with bit strings."""
+    return np.random.randint(0, 2, size=(pop_size, chrom_len), dtype=np.int8)
 
-def select_parent(population, scores):
-    candidates = rng.choice(len(population), TOUR_SIZE, replace=False)
-    best_idx = candidates[np.argmax(scores[candidates])]
-    return population[best_idx]
+def tournament_selection(pop: np.ndarray, fits: np.ndarray, k: int) -> np.ndarray:
+    """Tournament selection for selecting two parents."""
+    idxs = np.random.randint(0, len(pop), size=k)
+    best_idx = idxs[np.argmax(fits[idxs])]
+    return pop[best_idx].copy()
 
-def recombine(parent_a, parent_b):
-    if rng.random() < PC:
-        cut = rng.integers(1, GENE_LENGTH)
-        child1 = np.hstack((parent_a[:cut], parent_b[cut:]))
-        child2 = np.hstack((parent_b[:cut], parent_a[cut:]))
-        return child1, child2
-    return parent_a.copy(), parent_b.copy()
+def single_point_crossover(p1: np.ndarray, p2: np.ndarray):
+    """Perform single-point crossover."""
+    if np.random.rand() > CROSSOVER_RATE:
+        return p1.copy(), p2.copy()
+    point = np.random.randint(1, CHROM_LEN)  # Choose crossover point
+    c1 = np.concatenate([p1[:point], p2[point:]])
+    c2 = np.concatenate([p2[:point], p1[point:]])
+    return c1, c2
 
-def flip_bits(individual):
-    mutation_mask = rng.random(GENE_LENGTH) < PM
-    individual[mutation_mask] ^= 1
+def mutate(individual: np.ndarray) -> np.ndarray:
+    """Flip bits for mutation."""
+    mask = np.random.rand(CHROM_LEN) < MUTATION_RATE
+    individual[mask] = 1 - individual[mask]
     return individual
 
-def genetic_algorithm():
-    population = create_population()
-    log = []
+def evolve(pop: np.ndarray, generations: int):
+    """Evolve the population over generations."""
+    best_fitness_per_gen = []
+    best_individual = None
+    best_f = -np.inf
 
-    for gen in range(1, N_GENERATIONS + 1):
-        fitness_scores = np.array([evaluate(ind) for ind in population])
+    for _ in range(generations):
+        fits = np.array([fitness(ind) for ind in pop])
 
-        log.append({
-            "Generation": gen,
-            "Best Fitness": fitness_scores.max(),
-            "Average Fitness": fitness_scores.mean()
-        })
+        # Track best this generation and overall
+        gen_best_idx = np.argmax(fits)
+        gen_best = pop[gen_best_idx]
+        gen_best_f = fits[gen_best_idx]
+        best_fitness_per_gen.append(float(gen_best_f))
 
-        # Preserve elites
-        elite_indices = np.argsort(fitness_scores)[-ELITE_COUNT:]
-        elites = population[elite_indices]
+        if gen_best_f > best_f:
+            best_f = float(gen_best_f)
+            best_individual = gen_best.copy()
 
-        offspring = []
+        # Create next generation
+        new_pop = []
+        while len(new_pop) < len(pop):
+            p1 = tournament_selection(pop, fits, TOURNAMENT_K)
+            p2 = tournament_selection(pop, fits, TOURNAMENT_K)
+            c1, c2 = single_point_crossover(p1, p2)
+            c1 = mutate(c1)
+            c2 = mutate(c2)
+            new_pop.extend([c1, c2])
+        pop = np.array(new_pop[:len(pop)], dtype=np.int8)
 
-        while len(offspring) < POP_SIZE - ELITE_COUNT:
-            p1 = select_parent(population, fitness_scores)
-            p2 = select_parent(population, fitness_scores)
+    return best_individual, best_f, best_fitness_per_gen
 
-            c1, c2 = recombine(p1, p2)
-            offspring.append(flip_bits(c1))
+# ========================== #
+# STREAMLIT INTERFACE #
+# ========================== #
+st.set_page_config(page_title="Genetic Algorithm (70 bits, target ones = 40)", layout="centered")
 
-            if len(offspring) < POP_SIZE - ELITE_COUNT:
-                offspring.append(flip_bits(c2))
+st.title("🧬 Genetic Algorithm: Evolve a 70-bit Pattern")
+st.caption("Population = 200, Chromosome Length = 70, Target Ones = 40, Max Fitness = 70")
 
-        population = np.vstack((offspring, elites))
+with st.expander("ℹ️ Problem Setup"):
+    st.write("""
+    - **Population size**: 200
+    - **Chromosome length**: 70
+    - **Target number of ones**: 40
+    - **Max fitness at optimum**: 70 (when ones = 40)
+    - **Generations**: 50
+    - **Selection**: Tournament selection (k=3)
+    - **Crossover**: Single-point (rate=0.9)
+    - **Mutation**: Bit-flip (per-bit rate=1/70)
+    """)
 
-    final_scores = np.array([evaluate(ind) for ind in population])
-    best_idx = np.argmax(final_scores)
+col1, col2 = st.columns(2)
+with col1:
+    seed = st.number_input("Random Seed (for reproducibility)", min_value=0, value=42)
+with col2:
+    run_btn = st.button("Run Genetic Algorithm")
 
-    return pd.DataFrame(log), population[best_idx], final_scores[best_idx]
+if run_btn:
+    # Reproducibility
+    random.seed(seed)
+    np.random.seed(seed)
 
-# ================== STREAMLIT UI ==================
-st.set_page_config(page_title="Genetic Algorithm Optimization", layout="centered")
+    # Initialize and evolve
+    population = init_population(POP_SIZE, CHROM_LEN)
+    best_ind, best_fit, curve = evolve(population, N_GENERATIONS)
 
-# Add a background color to the title and adjust the page's look
-st.markdown("""
-    <style>
-        .title {
-            color: #4CAF50;
-            font-size: 40px;
-            font-weight: bold;
-            text-align: center;
-        }
-    </style>
-""", unsafe_allow_html=True)
+    # Results
+    ones_count = int(best_ind.sum())
+    zeros_count = CHROM_LEN - ones_count
+    bitstring = "".join(map(str, best_ind.tolist()))
 
-st.markdown('<p class="title">Genetic Algorithm Optimization (OneMax Problem)</p>', unsafe_allow_html=True)
+    st.subheader("🏁 Best Individual Found")
+    st.metric(label="Best Fitness", value=f"{best_fit:.0f}")
+    st.write(f"**Ones**: {ones_count} | **Zeros**: {zeros_count} | **Length**: {CHROM_LEN}")
+    st.code(bitstring, language="text")
 
-st.caption("This app demonstrates the optimization of the OneMax problem using a genetic algorithm with various operators.")
+    # Convergence plot
+    st.subheader("📉 Convergence (Best Fitness per Generation)")
+    fig, ax = plt.subplots()
+    ax.plot(range(1, len(curve) + 1), curve, linewidth=2)
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best Fitness")
+    ax.set_title("GA Convergence")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    st.pyplot(fig)
 
-# Use a different section layout for controls
-with st.expander("Adjust GA Settings"):
-    POP_SIZE = st.slider("Population Size", 50, 500, POP_SIZE)
-    GENE_LENGTH = st.slider("Gene Length", 10, 100, GENE_LENGTH)
-    N_GENERATIONS = st.slider("Generations", 10, 100, N_GENERATIONS)
-    PC = st.slider("Crossover Probability", 0.0, 1.0, PC)
-    PM = st.slider("Mutation Probability", 0.0, 1.0, PM)
-    ELITE_COUNT = st.slider("Elite Count", 1, 10, ELITE_COUNT)
-    TOUR_SIZE = st.slider("Tournament Size", 2, 10, TOUR_SIZE)
+    # Validation
+    if best_fit == MAX_FITNESS and ones_count == TARGET_ONES:
+        st.success("Perfect match achieved: ones = 40 and fitness = 70 ✅")
+    else:
+        st.info("GA reached near-optimal solutions; try another seed to explore further.")
 
-# Button to run the algorithm
-if st.button("Run Genetic Algorithm"):
-    history_df, best_individual, best_score = genetic_algorithm()
-
-    st.subheader("📊 Fitness Progress Over Generations")
-    st.line_chart(history_df.set_index("Generation"))
-
-    st.subheader("🏆 Optimal Solution")
-    st.write(f"**Best Fitness:** {best_score} / {GENE_LENGTH}")
-    st.code("".join(map(str, best_individual)))
-
-    st.info(
-        "This genetic algorithm evolves a population of binary strings to solve the OneMax problem. "
-        "The goal is to maximize the number of 1s in the chromosome."
-    )
+st.caption("© 2025 Simple GA demo (70 bits, optimum at 40 ones).")
