@@ -29,21 +29,50 @@ device = torch.device("cpu")
 # ------------------------------- #
 # Step 2: Fetch ImageNet Class Labels #
 # ------------------------------- #
-IMAGENET_CLASSES_URL = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
-response = requests.get(IMAGENET_CLASSES_URL)
-class_labels = response.text.splitlines()
+IMAGENET_CLASSES_URL = "https://raw.githubusercontent.com/pytorch/hub/mast
+import streamlit as st
+import torch
+import torchvision.models as models
+import torchvision.transforms as transforms
+import torch.nn.functional as F
+from PIL import Image
+import requests
+import pandas as pd
 
-# ------------------------------- #
-# Step 3: Load Pretrained ResNet-18 Model #
-# ------------------------------- #
-cnn_model = models.resnet18(pretrained=True)
-cnn_model.eval()
-cnn_model.to(device)
+# -------------------------------
+# Page Configuration
+# -------------------------------
+st.set_page_config(
+    page_title="Real-Time Image Classification",
+    layout="centered"
+)
 
-# ------------------------------- #
-# Step 4: Image Preprocessing Steps #
-# ------------------------------- #
-transform_pipeline = transforms.Compose([
+st.title("📷 Real-Time Image Classification Web App")
+st.caption("Pretrained ResNet-18 | OpenCV-style Computer Vision Output")
+
+# -------------------------------
+# Step 1: Import libraries
+# -------------------------------
+device = torch.device("cpu")
+
+# -------------------------------
+# Step 2: Download ImageNet class labels
+# -------------------------------
+LABELS_URL = "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt"
+labels_response = requests.get(LABELS_URL)
+imagenet_labels = labels_response.text.splitlines()
+
+# -------------------------------
+# Step 3: Load pretrained ResNet-18
+# -------------------------------
+model = models.resnet18(pretrained=True)
+model.eval()
+model.to(device)
+
+# -------------------------------
+# Step 4: Image preprocessing pipeline
+# -------------------------------
+preprocess = transforms.Compose([
     transforms.Resize(256),
     transforms.CenterCrop(224),
     transforms.ToTensor(),
@@ -53,61 +82,51 @@ transform_pipeline = transforms.Compose([
     )
 ])
 
-# ------------------------------- #
-# Step 5: Capture Image from Webcam #
-# ------------------------------- #
-st.subheader("📸 Capture Image from Webcam")
-captured_img = st.camera_input("Take a picture")
+# -------------------------------
+# Step 5: Capture image from webcam
+# -------------------------------
+st.subheader("📸 Capture Image")
+captured_image = st.camera_input("Take a picture using your webcam")
 
-# Display the image once captured
-if captured_img is not None:
-    img = Image.open(captured_img).convert("RGB")
+if captured_image is not None:
+    image = Image.open(captured_image).convert("RGB")
 
-    # Displaying the captured image
-    st.image(img, caption="Captured Image", use_column_width=True)
+    st.image(image, caption="Captured Image", use_column_width=True)
 
-    # ------------------------------- #
-    # Preprocess Image and Run Prediction #
-    # ------------------------------- #
-    tensor_input = transform_pipeline(img)
-    tensor_input_batch = tensor_input.unsqueeze(0).to(device)
+    input_tensor = preprocess(image)
+    input_batch = input_tensor.unsqueeze(0).to(device)
 
+    # -------------------------------
+    # Step 6: Model prediction & softmax
+    # -------------------------------
     with torch.no_grad():
-        model_output = cnn_model(tensor_input_batch)
+        output = model(input_batch)
 
-    softmax_probs = F.softmax(model_output[0], dim=0)
+    probabilities = F.softmax(output[0], dim=0)
 
-    # Get Top 5 Predictions
-    top5_probs, top5_indices = torch.topk(softmax_probs, 5)
+    top5_prob, top5_idx = torch.topk(probabilities, 5)
 
-    # Prepare the results in a DataFrame
-    prediction_data = pd.DataFrame({
-        "Class Label": [class_labels[idx] for idx in top5_indices],
-        "Probability": top5_probs.cpu().numpy()
+    results = pd.DataFrame({
+        "Class Label": [imagenet_labels[i] for i in top5_idx],
+        "Probability": top5_prob.cpu().numpy()
     })
 
-    # ------------------------------- #
-    # Display Results #
-    # ------------------------------- #
+    # -------------------------------
+    # Display results
+    # -------------------------------
     st.subheader("🔍 Top-5 Predictions")
+    st.dataframe(results, use_container_width=True)
 
-    # Display the top predictions as a table
-    st.dataframe(prediction_data, use_container_width=True)
-
-    # Display a bar chart for the top predictions
     st.bar_chart(
-        prediction_data.set_index("Class Label"),
+        results.set_index("Class Label"),
         horizontal=True
     )
 
-    # Display the top prediction with its probability
-    top_prediction = prediction_data.iloc[0]
     st.success(
-        f"**Top Prediction:** {top_prediction['Class Label']} ({top_prediction['Probability']:.2%})"
+        f"Top Prediction: {results.iloc[0]['Class Label']} "
+        f"({results.iloc[0]['Probability']:.2%})"
     )
 
-    # Information on Softmax probabilities
     st.info(
-        "The Softmax probabilities represent the confidence level of each predicted class."
+        "Softmax probabilities represent the confidence level of each predicted class."
     )
-
