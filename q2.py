@@ -6,7 +6,6 @@ import streamlit as st
 # ============================ #
 # 1) RULE ENGINE CONFIGURATION #
 # ============================ #
-# Logic remains identical to preserve functionality
 COMPARISONS = {
     "==": operator.eq,
     "!=": operator.ne,
@@ -136,23 +135,21 @@ def execute_rules(facts: Dict[str, Any], rules: List[Dict[str, Any]]) -> Tuple[D
 # ============================== #
 st.set_page_config(page_title="AC Controller Pro", layout="wide")
 
-# Custom CSS for a more "modern dashboard" feel
+# Updated CSS: Removed fixed white backgrounds to support Dark Mode
 st.markdown("""
     <style>
-    .main {
-        background-color: #f8f9fa;
-    }
-    .stMetric {
-        background-color: #ffffff;
+    /* Use transparent backgrounds with borders so they adapt to theme */
+    div[data-testid="stMetric"] {
+        background-color: rgba(128, 128, 128, 0.1);
+        border: 1px solid rgba(128, 128, 128, 0.2);
         padding: 15px;
         border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .status-card {
         padding: 20px;
         border-radius: 15px;
         border-left: 5px solid #007bff;
-        background-color: white;
+        background-color: rgba(128, 128, 128, 0.05);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -160,24 +157,17 @@ st.markdown("""
 st.title("❄️ ClimateControl AI Dashboard")
 st.markdown("---")
 
-# Main layout split into 2 columns: Inputs and Results
 col_in, col_out = st.columns([1, 1], gap="large")
 
 with col_in:
     st.subheader("📍 Environment Sensors")
-    
-    # Using sliders instead of number inputs for a more visual feel
     temp = st.slider("Ambient Temperature (°C)", 10, 45, 22)
     humid = st.slider("Relative Humidity (%)", 0, 100, 46)
     
     st.markdown("---")
     st.subheader("🏠 Home State")
-    
-    # Horizontal radio buttons for occupancy and time
     occ = st.radio("Occupancy Status", ["OCCUPIED", "EMPTY"], horizontal=True)
     tod = st.radio("Current Period", ["DAY", "NIGHT"], horizontal=True)
-    
-    # Move the checkbox to a toggle switch style
     win = st.toggle("Windows / Ventilation Open", value=False)
     
     run_btn = st.button("Apply Settings & Sync AC", use_container_width=True, type="primary")
@@ -198,16 +188,16 @@ with col_out:
         
         # Display as high-level metrics
         m1, m2, m3 = st.columns(3)
-        m1.metric("Mode", action['mode'])
-        m2.metric("Fan", action['fan_speed'])
-        m3.metric("Target", f"{action['setpoint']}°C" if action['setpoint'] else "N/A")
+        with m1: st.metric("Mode", action['mode'])
+        with m2: st.metric("Fan", action['fan_speed'])
+        with m3: st.metric("Target", f"{action['setpoint']}°C" if action['setpoint'] else "N/A")
         
-        # Detail box
-        st.info(f"**Primary Decision:** {action['reason']}")
+        # Using built-in containers that handle theme colors automatically
+        with st.container(border=True):
+            st.markdown(f"**Decision Logic:** {action['reason']}")
         
-        # Visual breakdown of logic
         with st.expander("View Logic Trace"):
-            st.write("### Sensor Data Snaphot")
+            st.write("### Sensor Data Snapshot")
             st.json(facts_data)
             
             st.write("### Rule Processing Queue")
@@ -221,6 +211,5 @@ with col_out:
     else:
         st.info("Adjust the sensors on the left and click **Apply Settings** to simulate the AC logic.")
 
-# Footer
 st.markdown("---")
 st.caption("ClimateControl AI v2.0 • Rule-Based Expert System")
