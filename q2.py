@@ -143,20 +143,20 @@ def execute_rules(facts: Dict[str, Any], rules: List[Dict[str, Any]]) -> Tuple[D
 # ============================== #
 # 2) STREAMLIT INTERFACE UI #
 # ============================== #
-st.set_page_config(page_title="Smart AC System", layout="wide")
+st.set_page_config(page_title="Smart AC System", layout="centered")
 st.title("Smart Air Conditioner Rule-Based System")
 
+# Sidebar section for inputs
 with st.sidebar:
-    st.header("Current Home Conditions")
-
+    st.header("Home Conditions")
     temperature_input = st.number_input("Temperature (°C)", value=22)
     humidity_input = st.number_input("Humidity (%)", value=46)
     occupancy_input = st.selectbox("Occupancy", ["OCCUPIED", "EMPTY"])
     time_of_day_input = st.selectbox("Time of Day", ["DAY", "NIGHT"])
     windows_open_input = st.checkbox("Windows Open", value=False)
-
     evaluate_button = st.button("Evaluate AC Action")
 
+# Facts data based on user input
 facts_data = {
     "temperature": temperature_input,
     "humidity": humidity_input,
@@ -165,12 +165,15 @@ facts_data = {
     "windows_open": windows_open_input
 }
 
+# Display the facts entered
 st.subheader("Input Facts")
 st.json(facts_data)
 
+# If the button is clicked, run the rule-based system
 if evaluate_button:
     action_details, matching_rules = execute_rules(facts_data, DEFAULT_CONDITIONS)
 
+    # Display the recommended AC action
     st.subheader("Recommended AC Action")
     st.success(
         f"""
@@ -181,6 +184,7 @@ if evaluate_button:
         """
     )
 
+    # Display matched rules
     st.subheader("Matched Rules (Ordered by Priority)")
     for rule in matching_rules:
         st.write(f"• **{rule['rule_name']}** (Priority: {rule['rule_priority']})")
