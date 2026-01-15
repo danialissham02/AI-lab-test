@@ -4,3 +4,6 @@ pillow
 requests
 pandas
 streamlit
+nltk
+PyPDF2
+
