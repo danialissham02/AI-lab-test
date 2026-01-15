@@ -6,5 +6,5 @@ pandas
 nltk
 PyPDF2
 streamlit
-plotly
+matplotlib
 
